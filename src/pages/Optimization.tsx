@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Bed, Users, Clock, Activity, Settings, Zap } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { mlService, OptimizationInput, OptimizationOutput } from '../services/MLService';
+import { useData } from '../contexts/DataContext';
 
 interface ResourceAllocation {
   beds: number;
@@ -10,6 +12,7 @@ interface ResourceAllocation {
 }
 
 export default function Optimization() {
+  const { useMLPredictions, mlModelInfo } = useData();
   const [resources, setResources] = useState<ResourceAllocation>({
     beds: 85,
     nurses: 120,
@@ -18,21 +21,39 @@ export default function Optimization() {
   });
 
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizationResults, setOptimizationResults] = useState<any[]>([]);
+  const [impactMetrics, setImpactMetrics] = useState<any[]>([]);
+  const [recommendations, setRecommendations] = useState<string[]>([]);
 
-  const optimizationResults = [
-    { department: 'ICU', current: 78, optimized: 65, improvement: 13 },
-    { department: 'Emergency', current: 45, optimized: 32, improvement: 13 },
-    { department: 'Surgery', current: 62, optimized: 48, improvement: 14 },
-    { department: 'General', current: 35, optimized: 28, improvement: 7 },
-    { department: 'Pediatrics', current: 41, optimized: 33, improvement: 8 },
-  ];
+  // Initialize with default values
+  React.useEffect(() => {
+    if (optimizationResults.length === 0) {
+      setOptimizationResults([
+        { department: 'ICU', current: 78, optimized: 65, improvement: 13 },
+        { department: 'Emergency', current: 45, optimized: 32, improvement: 13 },
+        { department: 'Surgery', current: 62, optimized: 48, improvement: 14 },
+        { department: 'General', current: 35, optimized: 28, improvement: 7 },
+        { department: 'Pediatrics', current: 41, optimized: 33, improvement: 8 },
+      ]);
+    }
 
-  const impactMetrics = [
-    { metric: 'Wait Time Reduction', value: '28%', color: 'text-green-600' },
-    { metric: 'Bed Utilization', value: '92%', color: 'text-blue-600' },
-    { metric: 'Staff Efficiency', value: '+15%', color: 'text-purple-600' },
-    { metric: 'Patient Satisfaction', value: '+22%', color: 'text-orange-600' },
-  ];
+    if (impactMetrics.length === 0) {
+      setImpactMetrics([
+        { metric: 'Wait Time Reduction', value: '28%', color: 'text-green-600' },
+        { metric: 'Bed Utilization', value: '92%', color: 'text-blue-600' },
+        { metric: 'Staff Efficiency', value: '+15%', color: 'text-purple-600' },
+        { metric: 'Patient Satisfaction', value: '+22%', color: 'text-orange-600' },
+      ]);
+    }
+
+    if (recommendations.length === 0) {
+      setRecommendations([
+        'Redistribute 12 beds from General Ward to ICU',
+        'Schedule additional nursing staff during peak hours (2-6 PM)',
+        'Relocate portable equipment to Emergency Department'
+      ]);
+    }
+  }, []);
 
   const handleResourceChange = (resource: keyof ResourceAllocation, value: number) => {
     setResources(prev => ({ ...prev, [resource]: value }));
@@ -40,9 +61,49 @@ export default function Optimization() {
 
   const handleOptimize = async () => {
     setIsOptimizing(true);
-    // Simulate optimization process
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    setIsOptimizing(false);
+    
+    try {
+      if (useMLPredictions && mlModelInfo.isLoaded) {
+        // Use ML optimization
+        const input: OptimizationInput = {
+          beds: resources.beds,
+          nurses: resources.nurses,
+          doctors: resources.doctors,
+          equipment: resources.equipment,
+          currentWaitTimes: [78, 45, 62, 35, 41], // Current wait times by department
+          patientFlow: [120, 80, 90, 150, 60], // Patient flow by department
+        };
+
+        const optimization = await mlService.optimizeResources(input);
+        
+        // Update results with ML optimization
+        setOptimizationResults([
+          { department: 'ICU', current: 78, optimized: Math.round(78 * (1 - optimization.expectedImprovements.waitTimeReduction / 100)), improvement: Math.round(optimization.expectedImprovements.waitTimeReduction) },
+          { department: 'Emergency', current: 45, optimized: Math.round(45 * (1 - optimization.expectedImprovements.waitTimeReduction / 100)), improvement: Math.round(optimization.expectedImprovements.waitTimeReduction) },
+          { department: 'Surgery', current: 62, optimized: Math.round(62 * (1 - optimization.expectedImprovements.waitTimeReduction / 100)), improvement: Math.round(optimization.expectedImprovements.waitTimeReduction) },
+          { department: 'General', current: 35, optimized: Math.round(35 * (1 - optimization.expectedImprovements.waitTimeReduction / 100)), improvement: Math.round(optimization.expectedImprovements.waitTimeReduction) },
+          { department: 'Pediatrics', current: 41, optimized: Math.round(41 * (1 - optimization.expectedImprovements.waitTimeReduction / 100)), improvement: Math.round(optimization.expectedImprovements.waitTimeReduction) },
+        ]);
+
+        setImpactMetrics([
+          { metric: 'Wait Time Reduction', value: `${Math.round(optimization.expectedImprovements.waitTimeReduction)}%`, color: 'text-green-600' },
+          { metric: 'Bed Utilization', value: `${Math.round(optimization.expectedImprovements.bedUtilization)}%`, color: 'text-blue-600' },
+          { metric: 'Staff Efficiency', value: `+${Math.round(optimization.expectedImprovements.staffEfficiency)}%`, color: 'text-purple-600' },
+          { metric: 'Patient Satisfaction', value: `+${Math.round(optimization.expectedImprovements.patientSatisfaction)}%`, color: 'text-orange-600' },
+        ]);
+
+        setRecommendations(optimization.recommendations);
+      } else {
+        // Fallback to simulation
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    } catch (error) {
+      console.error('Optimization failed:', error);
+      // Fallback to simulation
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    } finally {
+      setIsOptimizing(false);
+    }
   };
 
   const timeSeriesData = Array.from({ length: 24 }, (_, i) => ({

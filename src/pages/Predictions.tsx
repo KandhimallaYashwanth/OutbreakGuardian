@@ -1,29 +1,100 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertTriangle, TrendingUp, Eye, Brain, Target } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts';
 import { useData } from '../contexts/DataContext';
+import { mlService, MLPredictionInput } from '../services/MLService';
 
 export default function Predictions() {
-  const { outbreakData } = useData();
+  const { outbreakData, useMLPredictions, mlModelInfo } = useData();
   const [selectedTimeframe, setSelectedTimeframe] = useState('7d');
   const [selectedModel, setSelectedModel] = useState('lstm');
+  const [predictionData, setPredictionData] = useState<any[]>([]);
+  const [featureImportance, setFeatureImportance] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Generate prediction data
-  const predictionData = Array.from({ length: 14 }, (_, i) => ({
-    date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toLocaleDateString(),
-    risk: Math.max(20, Math.min(80, 45 + Math.sin(i * 0.5) * 15 + Math.random() * 10)),
-    cases: Math.max(10, Math.min(50, 25 + Math.sin(i * 0.3) * 8 + Math.random() * 5)),
-    confidence: Math.max(70, 95 - i * 2),
-  }));
+  // Generate ML predictions
+  useEffect(() => {
+    const generatePredictions = async () => {
+      if (!useMLPredictions) {
+        // Fallback to simulation
+        const simulatedData = Array.from({ length: 14 }, (_, i) => ({
+          date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toLocaleDateString(),
+          risk: Math.max(20, Math.min(80, 45 + Math.sin(i * 0.5) * 15 + Math.random() * 10)),
+          cases: Math.max(10, Math.min(50, 25 + Math.sin(i * 0.3) * 8 + Math.random() * 5)),
+          confidence: Math.max(70, 95 - i * 2),
+        }));
+        setPredictionData(simulatedData);
 
-  const featureImportance = [
-    { feature: 'Temperature', importance: 0.85 },
-    { feature: 'Humidity', importance: 0.72 },
-    { feature: 'Population Density', importance: 0.68 },
-    { feature: 'Previous Cases', importance: 0.91 },
-    { feature: 'Wastewater Levels', importance: 0.63 },
-    { feature: 'Social Media Sentiment', importance: 0.45 },
-  ];
+        const simulatedFeatures = [
+          { feature: 'Temperature', importance: 0.85 },
+          { feature: 'Humidity', importance: 0.72 },
+          { feature: 'Population Density', importance: 0.68 },
+          { feature: 'Previous Cases', importance: 0.91 },
+          { feature: 'Wastewater Levels', importance: 0.63 },
+          { feature: 'Social Media Sentiment', importance: 0.45 },
+        ];
+        setFeatureImportance(simulatedFeatures);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        // Generate predictions for next 14 days
+        const predictions = [];
+        const features = [];
+
+        for (let i = 0; i < 14; i++) {
+          const futureDate = new Date(Date.now() + i * 24 * 60 * 60 * 1000);
+          const input: MLPredictionInput = {
+            temperature: 20 + Math.random() * 15,
+            humidity: 40 + Math.random() * 40,
+            populationDensity: 1000 + Math.random() * 2000,
+            previousCases: outbreakData[outbreakData.length - 1]?.confirmedCases || 20,
+            wastewaterLevels: Math.random() * 100,
+            socialMediaSentiment: 0.3 + Math.random() * 0.4,
+            timestamp: futureDate.toISOString(),
+          };
+
+          const prediction = await mlService.predictOutbreak(input);
+          predictions.push({
+            date: futureDate.toLocaleDateString(),
+            risk: prediction.riskLevel,
+            cases: prediction.predictedCases,
+            confidence: prediction.confidence,
+          });
+
+          // Store feature importance from first prediction
+          if (i === 0) {
+            features.push(
+              { feature: 'Temperature', importance: prediction.featureImportance.temperature },
+              { feature: 'Humidity', importance: prediction.featureImportance.humidity },
+              { feature: 'Population Density', importance: prediction.featureImportance.populationDensity },
+              { feature: 'Previous Cases', importance: prediction.featureImportance.previousCases },
+              { feature: 'Wastewater Levels', importance: prediction.featureImportance.wastewaterLevels },
+              { feature: 'Social Media Sentiment', importance: prediction.featureImportance.socialMediaSentiment },
+            );
+          }
+        }
+
+        setPredictionData(predictions);
+        setFeatureImportance(features);
+      } catch (error) {
+        console.error('Failed to generate ML predictions:', error);
+        // Fallback to simulation
+        const simulatedData = Array.from({ length: 14 }, (_, i) => ({
+          date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toLocaleDateString(),
+          risk: Math.max(20, Math.min(80, 45 + Math.sin(i * 0.5) * 15 + Math.random() * 10)),
+          cases: Math.max(10, Math.min(50, 25 + Math.sin(i * 0.3) * 8 + Math.random() * 5)),
+          confidence: Math.max(70, 95 - i * 2),
+        }));
+        setPredictionData(simulatedData);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    generatePredictions();
+  }, [useMLPredictions, outbreakData]);
 
   const alerts = [
     {
