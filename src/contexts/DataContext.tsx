@@ -66,9 +66,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             const modelInfo = await mlApiService.getModelInfo();
             setMlModelInfo(modelInfo);
             setUseMLPredictions(true);
+            console.log('✅ Connected to Python ML API backend');
           }
         } catch (apiError) {
-          console.log('API model not available, using simulation mode');
+          console.log('Python API not available, using simulation mode');
           setUseMLPredictions(false);
         }
       }
@@ -97,7 +98,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const input = generateMLInput();
-      return await mlService.predictOutbreak(input);
+      // Try API service first, then fallback to client-side
+      try {
+        return await mlApiService.predictOutbreak(input);
+      } catch (apiError) {
+        console.log('API prediction failed, trying client-side...');
+        return await mlService.predictOutbreak(input);
+      }
     } catch (error) {
       console.error('ML prediction failed:', error);
       return null;

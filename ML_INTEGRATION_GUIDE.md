@@ -293,3 +293,4 @@ If you encounter issues with the integration:
 4. Check network requests in browser dev tools
 
 The application will gracefully fall back to simulation mode if your ML model fails to load or predict, ensuring the application remains functional.
+

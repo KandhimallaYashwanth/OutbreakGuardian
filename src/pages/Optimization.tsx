@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Bed, Users, Clock, Activity, Settings, Zap } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { mlService, OptimizationInput, OptimizationOutput } from '../services/MLService';
+import { mlApiService } from '../services/MLApiService';
 import { useData } from '../contexts/DataContext';
 
 interface ResourceAllocation {
@@ -74,7 +75,14 @@ export default function Optimization() {
           patientFlow: [120, 80, 90, 150, 60], // Patient flow by department
         };
 
-        const optimization = await mlService.optimizeResources(input);
+        // Try API service first, then fallback to client-side
+        let optimization;
+        try {
+          optimization = await mlApiService.optimizeResources(input);
+        } catch (apiError) {
+          console.log('API optimization failed, trying client-side...');
+          optimization = await mlService.optimizeResources(input);
+        }
         
         // Update results with ML optimization
         setOptimizationResults([

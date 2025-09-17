@@ -3,6 +3,7 @@ import { AlertTriangle, TrendingUp, Eye, Brain, Target } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts';
 import { useData } from '../contexts/DataContext';
 import { mlService, MLPredictionInput } from '../services/MLService';
+import { mlApiService } from '../services/MLApiService';
 
 export default function Predictions() {
   const { outbreakData, useMLPredictions, mlModelInfo } = useData();
@@ -55,7 +56,14 @@ export default function Predictions() {
             timestamp: futureDate.toISOString(),
           };
 
-          const prediction = await mlService.predictOutbreak(input);
+          // Try API service first, then fallback to client-side
+          let prediction;
+          try {
+            prediction = await mlApiService.predictOutbreak(input);
+          } catch (apiError) {
+            console.log('API prediction failed, trying client-side...');
+            prediction = await mlService.predictOutbreak(input);
+          }
           predictions.push({
             date: futureDate.toLocaleDateString(),
             risk: prediction.riskLevel,

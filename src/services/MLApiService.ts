@@ -52,7 +52,7 @@ class MLApiService {
   private baseUrl: string;
   private apiKey?: string;
 
-  constructor(baseUrl: string = 'http://localhost:8000/api', apiKey?: string) {
+  constructor(baseUrl: string = 'http://localhost:8000', apiKey?: string) {
     this.baseUrl = baseUrl;
     this.apiKey = apiKey;
   }
@@ -247,3 +247,4 @@ class MLApiService {
 
 // Export singleton instance
 export const mlApiService = new MLApiService();
+
